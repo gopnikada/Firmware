@@ -153,10 +153,6 @@ void VotedSensorsUpdate::parametersUpdate()
 			if ((uint32_t)device_id == driver_device_id) {
 				_gyro.enabled[driver_index] = (device_enabled == 1);
 
-				if (!_gyro.enabled[driver_index]) {
-					_gyro.priority[driver_index] = ORB_PRIO_UNINITIALIZED;
-				}
-
 				gyro_calibration_s gscale{};
 
 				(void)sprintf(str, "CAL_GYRO%u_XOFF", i);
@@ -248,10 +244,6 @@ void VotedSensorsUpdate::parametersUpdate()
 			/* if the calibration is for this device, apply it */
 			if ((uint32_t)device_id == driver_device_id) {
 				_accel.enabled[driver_index] = (device_enabled == 1);
-
-				if (!_accel.enabled[driver_index]) {
-					_accel.priority[driver_index] = ORB_PRIO_UNINITIALIZED;
-				}
 
 				accel_calibration_s ascale{};
 
@@ -384,12 +376,6 @@ void VotedSensorsUpdate::parametersUpdate()
 				_mag.enabled[topic_instance] = (device_enabled == 1);
 				_mag.power_compensation[topic_instance] = {_parameters.mag_comp_paramX[i], _parameters.mag_comp_paramY[i], _parameters.mag_comp_paramZ[i]};
 
-				// the mags that were published after the initial parameterUpdate
-				// would be given the priority even if disabled. Reset it to 0 in this case
-				if (!_mag.enabled[topic_instance]) {
-					_mag.priority[topic_instance] = ORB_PRIO_UNINITIALIZED;
-				}
-
 				mag_calibration_s mscale{};
 
 				(void)sprintf(str, "CAL_MAG%u_XOFF", i);
@@ -473,11 +459,6 @@ void VotedSensorsUpdate::accelPoll(struct sensor_combined_s &raw)
 		sensor_accel_integrated_s accel_report;
 
 		if (_accel.enabled[uorb_index] && _accel.subscription[uorb_index].update(&accel_report)) {
-
-			// First publication with data
-			if (_accel.priority[uorb_index] == 0) {
-				_accel.priority[uorb_index] = _accel.subscription[uorb_index].get_priority();
-			}
 
 			_accel_device_id[uorb_index] = accel_report.device_id;
 
@@ -565,11 +546,6 @@ void VotedSensorsUpdate::gyroPoll(struct sensor_combined_s &raw)
 
 		if (_gyro.enabled[uorb_index] && _gyro.subscription[uorb_index].update(&gyro_report)) {
 
-			// First publication with data
-			if (_gyro.priority[uorb_index] == 0) {
-				_gyro.priority[uorb_index] = _gyro.subscription[uorb_index].get_priority();
-			}
-
 			_gyro_device_id[uorb_index] = gyro_report.device_id;
 
 			/*
@@ -630,11 +606,6 @@ void VotedSensorsUpdate::magPoll(vehicle_magnetometer_s &magnetometer)
 
 		if (_mag.enabled[uorb_index] && _mag.subscription[uorb_index].update(&mag_report)) {
 
-			// First publication with data
-			if (_mag.priority[uorb_index] == 0) {
-				_mag.priority[uorb_index] = _mag.subscription[uorb_index].get_priority();
-			}
-
 			Vector3f vect(mag_report.x, mag_report.y, mag_report.z);
 
 			//throttle-/current-based mag compensation
@@ -691,12 +662,12 @@ bool VotedSensorsUpdate::checkFailover(SensorData &sensor, const char *sensor_na
 						      ((flags & DataValidator::ERROR_FLAG_HIGH_ERRDENSITY) ? " ERR DNST" : ""));
 
 				// reduce priority of failed sensor to the minimum
-				sensor.priority[failover_index] = ORB_PRIO_MIN;
+				sensor.priority[failover_index] = 1;
 
 				int ctr_valid = 0;
 
 				for (uint8_t i = 0; i < sensor.subscription_count; i++) {
-					if (sensor.enabled[i] && (sensor.priority[i] > ORB_PRIO_MIN)) {
+					if (sensor.enabled[i] && (sensor.priority[i] > 0)) {
 						ctr_valid++;
 					}
 				}
